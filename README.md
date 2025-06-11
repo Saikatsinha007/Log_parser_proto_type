@@ -2,7 +2,11 @@
 
 A powerful and interactive log parsing application that allows users to upload raw log files, extract structured fields like timestamp, IP address, username, log level, and parameters using the Drain3 algorithm, and interactively approve or reject entries via an intuitive Streamlit UI.
 
----
+
+
+
+https://github.com/user-attachments/assets/176644ef-f84f-4deb-8829-f4be4bdb980b
+
 
 ## 🚀 Features
 
