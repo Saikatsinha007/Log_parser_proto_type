@@ -1,0 +1,3 @@
+[2025-06-11 10:42:13] INFO: User 'john_doe' logged in from IP 192.168.1.10
+[2025-06-11 10:45:02] ERROR: Failed login attempt for user 'alice' from IP 192.168.1.15
+[2025-06-11 11:00:00] WARNING: Disk usage at 90% for user 'admin'
