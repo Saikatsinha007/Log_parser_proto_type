@@ -1,4 +1,4 @@
-# 🧠 Advanced Log Parser with Streamlit + Drain3
+# 🧠 Advanced Log Parser with Streamlit
 
 A powerful and interactive log parsing application that allows users to upload raw log files, extract structured fields like timestamp, IP address, username, log level, and parameters using the Drain3 algorithm, and interactively approve or reject entries via an intuitive Streamlit UI.
 
