@@ -7,7 +7,6 @@ A powerful and interactive log parsing application that allows users to upload r
 ## 🚀 Features
 
 - 📄 Upload and parse `.txt` log files
-- 🧠 Intelligent log parsing using [Drain3](https://github.com/logpai/Drain3)
 - 🔍 Extract key fields: timestamp, log level, IP address, username, message template, and parameters
 - ✅ Interactive review with approve/reject/pending actions
 - ✏️ Edit extracted templates and parameters
