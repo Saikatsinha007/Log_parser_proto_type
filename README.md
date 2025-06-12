@@ -4,6 +4,10 @@ A powerful and interactive log parsing application that allows users to upload r
 
 
 
+https://github.com/user-attachments/assets/7915a46e-e5d9-490d-a3dc-d38d63ecb2e2
+
+
+
 
 https://github.com/user-attachments/assets/176644ef-f84f-4deb-8829-f4be4bdb980b
 
