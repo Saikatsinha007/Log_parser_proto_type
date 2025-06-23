@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Excel Viewer & Editor</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* Light gray background */
+        }
+        /* Custom scrollbar for table container */
+        .overflow-x-auto::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-track {
+            background: #e2e8f0; /* Light track */
+            border-radius: 10px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb {
+            background: #94a3b8; /* Gray thumb */
+            border-radius: 10px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+            background: #64748b; /* Darker gray on hover */
+        }
+        [contenteditable]:focus {
+            outline: 2px solid #3b82f6; /* Blue outline on focus for editable cells */
+            border-radius: 0.25rem;
+        }
+        /* Sticky header for tables */
+        .sticky-header th {
+            position: sticky;
+            top: 0;
+            background-color: #f9fafb; /* Lighter background for sticky header */
+            z-index: 10; /* Ensure header stays above content */
+        }
+        /* Loading Spinner */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Custom Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 90%;
+            width: 400px;
+            transform: translateY(-20px);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.show .modal-content {
+            transform: translateY(0);
+        }
+        /* Highlight for dependencies */
+        .highlight-dependency {
+            background-color: #bfdbfe; /* blue-200 */
+            border: 1px solid #3b82f6; /* blue-500 */
+        }
+        /* Hover effect for cells to indicate copyable */
+        td[contenteditable]:hover {
+            cursor: text;
+        }
+        td.copyable:hover {
+            cursor: pointer;
+            background-color: #e0f2fe; /* Light blue background on hover */
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-8 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-7xl w-full bg-white shadow-lg rounded-xl p-6 sm:p-8">
+        <h1 class="text-3xl sm:text-4xl font-bold text-center text-gray-900 mb-6 flex items-center justify-center">
+            <span class="mr-3 text-blue-500"><i class="fas fa-file-excel"></i></span> Advanced Excel Viewer & Editor
+        </h1>
+        <p class="text-center text-gray-600 mb-8">Upload your Excel file to view, edit, explore formulas, dependencies, and more!</p>
+
+        <!-- File Uploader -->
+        <div class="mb-6">
+            <label for="excelFile" class="block text-sm font-medium text-gray-700 mb-2">Upload an Excel file (.xlsx)</label>
+            <input type="file" id="excelFile" accept=".xlsx" class="block w-full text-sm text-gray-500
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-full file:border-0
+                file:text-sm file:font-semibold
+                file:bg-blue-50 file:text-blue-700
+                hover:file:bg-blue-100 cursor-pointer rounded-lg border border-gray-300 p-2">
+            <div id="loadingMessage" class="mt-2 text-sm text-blue-600 flex items-center hidden">
+                <div class="spinner mr-2"></div> Loading file...
+            </div>
+            <div id="statusMessage" class="mt-2 text-sm"></div>
+        </div>
+
+        <hr class="my-8 border-gray-200">
+
+        <!-- Sheet Selection and Data Display -->
+        <div id="appContent" class="hidden">
+            <div class="mb-6 flex flex-col sm:flex-row items-start sm:items-end gap-4">
+                <div class="flex-1 w-full">
+                    <label for="sheetSelector" class="block text-sm font-medium text-gray-700 mb-2">Select a Spreadsheet</label>
+                    <select id="sheetSelector" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md shadow-sm">
+                        <!-- Options will be populated by JavaScript -->
+                    </select>
+                </div>
+                <div class="flex-1 w-full sm:w-auto">
+                    <label for="searchFilter" class="block text-sm font-medium text-gray-700 mb-2">Search/Filter Table</label>
+                    <input type="text" id="searchFilter" placeholder="Type to filter..." class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm px-3 py-2">
+                </div>
+                <div class="flex-shrink-0 flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                    <button id="addRowBtn" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-3 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:-translate-y-0.5 text-sm whitespace-nowrap">
+                        <i class="fas fa-plus"></i> Add Row
+                    </button>
+                    <button id="deleteLastRowBtn" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:-translate-y-0.5 text-sm whitespace-nowrap">
+                        <i class="fas fa-minus"></i> Del Last Row
+                    </button>
+                    <button id="addColumnBtn" class="flex-1 bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-3 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:-translate-y-0.5 text-sm whitespace-nowrap">
+                        <i class="fas fa-plus-square"></i> Add Col
+                    </button>
+                    <button id="deleteLastColBtn" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:-translate-y-0.5 text-sm whitespace-nowrap">
+                        <i class="fas fa-minus-square"></i> Del Last Col
+                    </button>
+                </div>
+            </div>
+
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Editing Sheet: <span id="currentSheetName" class="font-mono text-blue-700"></span></h2>
+            <div class="overflow-x-auto rounded-lg shadow-inner border border-gray-200 mb-8">
+                <table id="dataTable" class="min-w-full divide-y divide-gray-200 bg-white">
+                    <thead class="bg-gray-50 sticky-header">
+                        <tr id="tableHeader">
+                            <!-- Headers will be populated by JavaScript -->
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-gray-200">
+                        <!-- Data will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <hr class="my-8 border-gray-200">
+
+            <!-- Formula and Dependency Section -->
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Formula and Dependency Analysis (Static)</h2>
+            <div class="bg-blue-50 border-l-4 border-blue-400 text-blue-700 p-4 rounded-md mb-6">
+                <p class="text-sm"><i class="fas fa-info-circle mr-2"></i>Note: Formulas and dependencies are extracted from the original file. In-app edits do not dynamically update these calculations or the displayed formulas/dependencies.</p>
+            </div>
+
+            <div id="formulasSection" class="mb-8">
+                <h3 class="text-xl font-medium text-gray-800 mb-3">Formulas Found:</h3>
+                <div class="overflow-x-auto rounded-lg shadow-inner border border-gray-200">
+                    <table id="formulaTable" class="min-w-full divide-y divide-gray-200 bg-white">
+                        <thead class="bg-gray-50 sticky-header">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cell</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Formula</th>
+                            </tr>
+                        </thead>
+                        <tbody id="formulaTableBody" class="divide-y divide-gray-200">
+                            <!-- Formulas will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <p id="noFormulas" class="text-gray-500 mt-2 hidden">No formulas found in this sheet.</p>
+            </div>
+
+            <div id="dependenciesSection" class="mb-8">
+                <h3 class="text-xl font-medium text-gray-800 mb-3 flex items-center">
+                    Column/Cell Dependencies (Basic):
+                    <div class="ml-4 flex items-center">
+                        <input type="text" id="goToCellInput" placeholder="Go to cell (e.g., A10)" class="w-40 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm px-3 py-2 mr-2">
+                        <button id="goToCellBtn" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded-lg shadow-md transition duration-300 ease-in-out text-sm">
+                            <i class="fas fa-location-arrow"></i> Go
+                        </button>
+                    </div>
+                </h3>
+                <div class="overflow-x-auto rounded-lg shadow-inner border border-gray-200">
+                    <table id="dependencyTable" class="min-w-full divide-y divide-gray-200 bg-white">
+                        <thead class="bg-gray-50 sticky-header">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cell with Formula</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Depends On</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dependencyTableBody" class="divide-y divide-gray-200">
+                            <!-- Dependencies will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <p id="noDependencies" class="text-gray-500 mt-2 hidden">No cell dependencies identified from formulas in this sheet.</p>
+                <p class="text-xs text-gray-500 mt-2"><i class="fas fa-lightbulb mr-1"></i> This analysis identifies direct cell references (e.g., A1, B2) within formulas. It does not interpret complex Excel functions, named ranges, or cross-sheet dynamic links. Click on a formula cell in the 'Formulas Found' table to highlight its dependencies in the data table.</p>
+            </div>
+
+            <hr class="my-8 border-gray-200">
+
+            <!-- Download Edited Data -->
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Download Edited Data</h2>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <button id="downloadCsvBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:-translate-y-1">
+                    <i class="fas fa-file-csv mr-2"></i> Download Current Sheet as CSV
+                </button>
+                <button id="downloadExcelBtn" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:-translate-y-1">
+                    <i class="fas fa-file-excel mr-2"></i> Download All Edited Sheets as New Excel File
+                </button>
+                <button id="downloadFormulasJsonBtn" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:-translate-y-1">
+                    <i class="fas fa-file-code mr-2"></i> Download Formulas/Dependencies JSON
+                </button>
+            </div>
+        </div>
+
+        <div id="initialPrompt" class="text-center text-gray-500 mt-8 p-4 bg-gray-50 rounded-lg shadow-inner">
+            <p><i class="fas fa-cloud-upload-alt mr-2"></i> Upload an Excel file to begin editing and analyzing!</p>
+        </div>
+    </div>
+
+    <!-- Custom Modal for Messages -->
+    <div id="customModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modalTitle" class="text-lg font-semibold text-gray-800"></h3>
+                <button id="modalCloseBtn" class="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
+            </div>
+            <p id="modalMessage" class="text-gray-600 mb-4"></p>
+            <div class="flex justify-end">
+                <button id="modalOkBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SheetJS (xlsx.full.min.js) for Excel parsing and writing -->
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+
+    <script>
+        // Global state for storing workbook data
+        let workbookData = {}; // Stores all sheet data as arrays of arrays (for editing)
+        let workbookFormulas = {}; // Stores original formulas per sheet (for extraction/re-applying)
+        let currentWorkbook = null; // Stores the raw workbook object from SheetJS
+
+        // DOM Elements
+        const excelFile = document.getElementById('excelFile');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const statusMessage = document.getElementById('statusMessage');
+        const appContent = document.getElementById('appContent');
+        const initialPrompt = document.getElementById('initialPrompt');
+        const sheetSelector = document.getElementById('sheetSelector');
+        const currentSheetName = document.getElementById('currentSheetName');
+        const dataTable = document.getElementById('dataTable');
+        const tableHeader = document.getElementById('tableHeader');
+        const tableBody = document.getElementById('tableBody');
+        const formulaTableBody = document.getElementById('formulaTableBody');
+        const dependencyTableBody = document.getElementById('dependencyTableBody');
+        const noFormulas = document.getElementById('noFormulas');
+        const noDependencies = document.getElementById('noDependencies');
+        const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+        const downloadExcelBtn = document.getElementById('downloadExcelBtn');
+        const downloadFormulasJsonBtn = document.getElementById('downloadFormulasJsonBtn');
+        const searchFilter = document.getElementById('searchFilter');
+        const addRowBtn = document.getElementById('addRowBtn');
+        const deleteLastRowBtn = document.getElementById('deleteLastRowBtn');
+        const addColumnBtn = document.getElementById('addColumnBtn');
+        const deleteLastColBtn = document.getElementById('deleteLastColBtn');
+        const goToCellInput = document.getElementById('goToCellInput');
+        const goToCellBtn = document.getElementById('goToCellBtn');
+
+        // Modal Elements
+        const customModal = document.getElementById('customModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalMessage = document.getElementById('modalMessage');
+        const modalCloseBtn = document.getElementById('modalCloseBtn');
+        const modalOkBtn = document.getElementById('modalOkBtn');
+
+        // Event Listeners
+        excelFile.addEventListener('change', handleFileUpload);
+        sheetSelector.addEventListener('change', handleSheetSelection);
+        downloadCsvBtn.addEventListener('click', downloadCurrentSheetCsv);
+        downloadExcelBtn.addEventListener('click', downloadAllSheetsExcel);
+        downloadFormulasJsonBtn.addEventListener('click', downloadFormulasAndDependenciesJson);
+        searchFilter.addEventListener('keyup', filterTable);
+        addRowBtn.addEventListener('click', addRow);
+        deleteLastRowBtn.addEventListener('click', deleteLastRow);
+        addColumnBtn.addEventListener('click', addColumn);
+        deleteLastColBtn.addEventListener('click', deleteLastColumn);
+        goToCellBtn.addEventListener('click', goToCell);
+        goToCellInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                goToCell();
+            }
+        });
+        formulaTableBody.addEventListener('click', highlightDependenciesFromFormulaTable);
+        modalCloseBtn.addEventListener('click', hideModal);
+        modalOkBtn.addEventListener('click', hideModal);
+        customModal.addEventListener('click', (e) => { // Close if clicked outside content
+            if (e.target === customModal) {
+                hideModal();
+            }
+        });
+
+        // --- Utility Functions ---
+
+        /**
+         * Displays a custom modal message.
+         * @param {string} title - The title of the modal.
+         * @param {string} message - The message to display.
+         * @param {string} type - 'success', 'error', 'info'. (Currently only affects text color)
+         */
+        function showModal(title, message, type = 'info') {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            customModal.classList.remove('hidden');
+            // Add slight delay for transition
+            setTimeout(() => customModal.classList.add('show'), 10);
+
+            // Basic styling based on type
+            modalTitle.className = 'text-lg font-semibold';
+            if (type === 'error') {
+                modalTitle.classList.add('text-red-700');
+                modalMessage.classList.add('text-red-600');
+            } else if (type === 'success') {
+                modalTitle.classList.add('text-green-700');
+                modalMessage.classList.add('text-green-600');
+            } else {
+                modalTitle.classList.add('text-gray-800');
+                modalMessage.classList.add('text-gray-600');
+            }
+        }
+
+        function hideModal() {
+            customModal.classList.remove('show');
+            setTimeout(() => customModal.classList.add('hidden'), 300); // Wait for transition
+        }
+
+        // Converts column index (0-based) to Excel column letter (e.g., 0 -> A, 25 -> Z, 26 -> AA)
+        function getExcelColumnLetter(colIndex) {
+            let column = '';
+            let tempColIndex = colIndex + 1; // 1-based index for Excel
+            while (tempColIndex > 0) {
+                const remainder = (tempColIndex - 1) % 26;
+                column = String.fromCharCode(65 + remainder) + column;
+                tempColIndex = Math.floor((tempColIndex - 1) / 26);
+            }
+            return column;
+        }
+
+        // Converts Excel A1-style cell address to {row, col} 0-based indices
+        function getCellIndices(cellAddress) {
+            const match = cellAddress.match(/^([A-Z]+)(\d+)$/);
+            if (!match) return null;
+            const colLetters = match[1];
+            const rowNumber = parseInt(match[2], 10);
+
+            let colIndex = 0;
+            for (let i = 0; i < colLetters.length; i++) {
+                colIndex = colIndex * 26 + (colLetters.charCodeAt(i) - 65 + 1);
+            }
+            return { row: rowNumber - 1, col: colIndex - 1 };
+        }
+
+        /**
+         * Creates an Excel A1-style cell address from 0-based row and column indices.
+         * @param {number} rowIndex - 0-based row index.
+         * @param {number} colIndex - 0-based column index.
+         * @returns {string} The A1-style cell address (e.g., "A1", "B5").
+         */
+        function getA1Address(rowIndex, colIndex) {
+            return getExcelColumnLetter(colIndex) + (rowIndex + 1);
+        }
+
+        // --- Main Functions ---
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            loadingMessage.classList.remove('hidden');
+            statusMessage.textContent = '';
+            appContent.classList.add('hidden');
+            initialPrompt.classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    currentWorkbook = XLSX.read(data, { type: 'array', cellFormula: true, sheetRows: 0 }); // sheetRows: 0 to read all rows
+                    workbookData = {};
+                    workbookFormulas = {};
+
+                    sheetSelector.innerHTML = ''; // Clear previous options
+
+                    currentWorkbook.SheetNames.forEach(sheetName => {
+                        const worksheet = currentWorkbook.Sheets[sheetName];
+                        // Convert sheet to array of arrays, preserving raw values (including formulas)
+                        // This handles cases where the first row might be empty or not headers
+                        const sheetAsAoA = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
+
+                        // Ensure that workbookData[sheetName] always stores the data as if the first row is *data*,
+                        // even if it visually acts as headers in displaySheetData.
+                        // This simplifies row/column manipulation.
+                        workbookData[sheetName] = sheetAsAoA;
+
+                        // Extract formulas separately
+                        const formulas = {};
+                        for (const cellAddress in worksheet) {
+                            if (cellAddress.startsWith('!') || !worksheet.hasOwnProperty(cellAddress)) continue;
+                            const cell = worksheet[cellAddress];
+                            if (cell.f) { // 'f' property exists if it's a formula cell
+                                formulas[cellAddress] = cell.f; // Store the formula string
+                            }
+                        }
+                        workbookFormulas[sheetName] = formulas;
+
+                        const option = document.createElement('option');
+                        option.value = sheetName;
+                        option.textContent = sheetName;
+                        sheetSelector.appendChild(option);
+                    });
+
+                    loadingMessage.classList.add('hidden');
+                    showModal('File Loaded', 'Excel file loaded successfully!', 'success');
+
+                    appContent.classList.remove('hidden');
+                    initialPrompt.classList.add('hidden');
+                    if (currentWorkbook.SheetNames.length > 0) {
+                        sheetSelector.value = currentWorkbook.SheetNames[0];
+                        handleSheetSelection(); // Load the first sheet
+                    }
+
+                } catch (error) {
+                    loadingMessage.classList.add('hidden');
+                    showModal('Error Loading File', `Error loading Excel file: ${error.message}`, 'error');
+                    appContent.classList.add('hidden');
+                    initialPrompt.classList.remove('hidden');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function handleSheetSelection() {
+            const selectedSheet = sheetSelector.value;
+            currentSheetName.textContent = selectedSheet;
+            displaySheetData(selectedSheet);
+            displayFormulasAndDependencies(selectedSheet);
+            searchFilter.value = ''; // Clear search filter on sheet change
+            removeDependencyHighlights(); // Clear highlights on sheet change
+        }
+
+        function displaySheetData(sheetName) {
+            tableHeader.innerHTML = '';
+            tableBody.innerHTML = '';
+
+            const sheetData = workbookData[sheetName];
+            if (!sheetData || sheetData.length === 0) {
+                // If sheet is empty, create a minimal header and message
+                const emptyHeader = document.createElement('th');
+                emptyHeader.scope = 'col';
+                emptyHeader.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+                emptyHeader.textContent = 'No Data';
+                tableHeader.appendChild(emptyHeader);
+
+                const emptyRow = document.createElement('tr');
+                emptyRow.innerHTML = `<td colspan="1" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">No data in this sheet.</td>`;
+                tableBody.appendChild(emptyRow);
+                return;
+            }
+
+            // Determine headers: If first row has data, use it as headers, otherwise generate A, B, C...
+            let headers = [];
+            let dataStartRowIndex = 0; // Where data actually begins in workbookData[sheetName]
+
+            // Heuristic: If first row is not empty, use it as headers.
+            if (sheetData[0] && sheetData[0].some(cell => cell !== null && cell !== undefined && String(cell).trim() !== '')) {
+                headers = sheetData[0].map((h, i) => h === null || h === undefined ? getExcelColumnLetter(i) : String(h));
+                dataStartRowIndex = 1;
+            } else {
+                // If first row is empty, generate headers based on max column count
+                const maxCols = Math.max(...sheetData.map(row => row ? row.length : 0));
+                for (let i = 0; i < maxCols; i++) {
+                    headers.push(getExcelColumnLetter(i));
+                }
+            }
+
+            headers.forEach((header, index) => {
+                const th = document.createElement('th');
+                th.scope = 'col';
+                th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+                th.textContent = header;
+                th.dataset.colIndex = index; // Store column index
+                tableHeader.appendChild(th);
+            });
+
+            // Populate table body with editable cells
+            const dataRowsToDisplay = sheetData.slice(dataStartRowIndex);
+
+            dataRowsToDisplay.forEach((row, rowIndexInDisplay) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-100'; // Add hover effect
+                tr.dataset.originalDataIndex = rowIndexInDisplay + dataStartRowIndex; // Store actual index in workbookData
+
+                // Ensure row has enough cells for all headers
+                const currentRowLength = row ? row.length : 0;
+                const cellsToAdd = Math.max(0, headers.length - currentRowLength);
+                if (cellsToAdd > 0) {
+                    row = row ? [...row, ...Array(cellsToAdd).fill(null)] : Array(headers.length).fill(null);
+                }
+
+                row.forEach((cellValue, colIndex) => {
+                    const td = document.createElement('td');
+                    td.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-900 border border-gray-100 copyable'; // Add copyable class
+                    td.contentEditable = true; // Make cells editable
+                    td.textContent = cellValue === null || cellValue === undefined ? '' : String(cellValue);
+                    td.dataset.colIndex = colIndex; // Store column index
+                    td.dataset.rowIndex = rowIndexInDisplay + dataStartRowIndex; // Store row index in the original data
+
+                    tr.appendChild(td);
+
+                    // Add an event listener to update workbookData on cell edit
+                    td.addEventListener('input', (e) => {
+                        const editedValue = e.target.textContent;
+                        const rowIdx = parseInt(e.target.dataset.rowIndex);
+                        const colIdx = parseInt(e.target.dataset.colIndex);
+                        if (workbookData[sheetName] && workbookData[sheetName][rowIdx]) {
+                            workbookData[sheetName][rowIdx][colIdx] = editedValue;
+                        }
+                    });
+
+                    // Add event listener for copying cell content
+                    td.addEventListener('click', (e) => {
+                        // Prevent conflict with contenteditable when directly editing
+                        if (e.target.isContentEditable && document.activeElement === e.target) {
+                            return;
+                        }
+                        const textToCopy = e.target.textContent;
+                        copyToClipboard(textToCopy);
+                    });
+                });
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function copyToClipboard(text) {
+            // Using a temporary textarea to copy to clipboard for wider browser compatibility
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed'; // Ensure it's not visible
+            textarea.style.opacity = 0;
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showModal('Copied!', 'Cell content copied to clipboard.', 'success');
+            } catch (err) {
+                showModal('Copy Failed', 'Could not copy text. Please try manually.', 'error');
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        }
+
+        function extractFormulasAndDependencies(sheetName) {
+            const formulas = workbookFormulas[sheetName] || {};
+            const dependencies = {};
+
+            for (const cellAddress in formulas) {
+                const formulaString = formulas[cellAddress];
+                // Regex to find cell references like A1, B2, C10, $A$1, etc.
+                const foundReferences = new Set(Array.from(formulaString.matchAll(/[A-Z]{1,3}\d+/g)).map(match => match[0].toUpperCase()));
+
+                if (foundReferences.size > 0) {
+                    dependencies[cellAddress] = Array.from(foundReferences).sort();
+                }
+            }
+            return { formulas, dependencies };
+        }
+
+        function displayFormulasAndDependencies(sheetName) {
+            formulaTableBody.innerHTML = '';
+            dependencyTableBody.innerHTML = '';
+            noFormulas.classList.add('hidden');
+            noDependencies.classList.add('hidden');
+
+            const { formulas, dependencies } = extractFormulasAndDependencies(sheetName);
+
+            if (Object.keys(formulas).length > 0) {
+                for (const cell in formulas) {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-gray-50 cursor-pointer'; // Make formula rows clickable
+                    tr.dataset.cellAddress = cell; // Store cell address for highlighting
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${cell}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${formulas[cell]}</td>
+                    `;
+                    formulaTableBody.appendChild(tr);
+                }
+            } else {
+                noFormulas.classList.remove('hidden');
+            }
+
+            if (Object.keys(dependencies).length > 0) {
+                for (const cell in dependencies) {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-gray-50';
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${cell}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${dependencies[cell].join(', ')}</td>
+                    `;
+                    dependencyTableBody.appendChild(tr);
+                }
+            } else {
+                noDependencies.classList.remove('hidden');
+            }
+        }
+
+        function highlightDependenciesFromFormulaTable(event) {
+            let targetRow = event.target.closest('tr');
+            if (!targetRow || !targetRow.dataset.cellAddress) {
+                return;
+            }
+
+            removeDependencyHighlights(); // Clear any previous highlights
+
+            const formulaCellAddress = targetRow.dataset.cellAddress;
+            const sheetName = sheetSelector.value;
+            const { dependencies } = extractFormulasAndDependencies(sheetName);
+
+            const cellsToHighlight = dependencies[formulaCellAddress];
+
+            if (cellsToHighlight && cellsToHighlight.length > 0) {
+                cellsToHighlight.forEach(depCellAddress => {
+                    const coords = getCellIndices(depCellAddress);
+                    if (coords) {
+                        // Find the corresponding cell in the displayed data table
+                        const rowElement = tableBody.querySelector(`tr[data-original-data-index="${coords.row}"]`);
+                        if (rowElement) {
+                            const cellElement = rowElement.querySelector(`td[data-col-index="${coords.col}"]`);
+                            if (cellElement) {
+                                cellElement.classList.add('highlight-dependency');
+                                // Scroll to the first highlighted cell if necessary
+                                if (!this.scrolledToHighlighted && cellElement.scrollIntoView) {
+                                    cellElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                    this.scrolledToHighlighted = true; // Flag to only scroll once per selection
+                                }
+                            }
+                        }
+                    }
+                });
+                this.scrolledToHighlighted = false; // Reset flag
+            }
+        }
+
+        function removeDependencyHighlights() {
+            document.querySelectorAll('.highlight-dependency').forEach(cell => {
+                cell.classList.remove('highlight-dependency');
+            });
+        }
+
+        function filterTable() {
+            const filterValue = searchFilter.value.toLowerCase();
+            const rows = tableBody.querySelectorAll('tr');
+
+            rows.forEach(row => {
+                let rowText = '';
+                row.querySelectorAll('td').forEach(cell => {
+                    rowText += cell.textContent.toLowerCase() + ' ';
+                });
+
+                if (rowText.includes(filterValue)) {
+                    row.style.display = ''; // Show row
+                } else {
+                    row.style.display = 'none'; // Hide row
+                }
+            });
+        }
+
+        function addRow() {
+            const sheetName = sheetSelector.value;
+            if (!sheetName || !workbookData[sheetName]) {
+                showModal('Error', 'Please select a sheet first.', 'error');
+                return;
+            }
+
+            const currentData = workbookData[sheetName];
+            const numCols = currentData.length > 0 ? currentData[0].length : 5; // Default 5 columns if no data
+            const newRow = Array(numCols).fill('');
+            currentData.push(newRow);
+
+            showModal('Row Added', `A new row has been added to the end of sheet '${sheetName}'.`, 'success');
+            displaySheetData(sheetName); // Re-render table to show changes
+        }
+
+        function deleteLastRow() {
+            const sheetName = sheetSelector.value;
+            if (!sheetName || !workbookData[sheetName]) {
+                showModal('Error', 'Please select a sheet first.', 'error');
+                return;
+            }
+
+            const currentData = workbookData[sheetName];
+            if (currentData.length <= 1 && currentData[0] && currentData[0].length > 0) { // If only headers and no data rows or single row
+                showModal('Cannot Delete', 'Cannot delete the last remaining data row (or header row).', 'info');
+                return;
+            }
+            if (currentData.length === 0) {
+                 showModal('No Rows', 'There are no rows to delete.', 'info');
+                 return;
+            }
+
+            currentData.pop(); // Remove the last row
+
+            showModal('Row Deleted', `The last row has been deleted from sheet '${sheetName}'.`, 'success');
+            displaySheetData(sheetName); // Re-render table to show changes
+        }
+
+        function addColumn() {
+            const sheetName = sheetSelector.value;
+            if (!sheetName || !workbookData[sheetName]) {
+                showModal('Error', 'Please select a sheet first.', 'error');
+                return;
+            }
+
+            const currentData = workbookData[sheetName];
+            if (currentData.length === 0) {
+                // If no data, add a header row with one column and an empty data row
+                workbookData[sheetName].push([getExcelColumnLetter(0)]); // Header
+                workbookData[sheetName].push(['']); // First data row
+            } else {
+                // Add a new cell to each row (including potential header row)
+                currentData.forEach(row => {
+                    row.push(''); // Add empty string for the new column cell
+                });
+            }
+
+            showModal('Column Added', `A new column has been added to the end of sheet '${sheetName}'.`, 'success');
+            displaySheetData(sheetName); // Re-render table to show changes
+        }
+
+        function deleteLastColumn() {
+            const sheetName = sheetSelector.value;
+            if (!sheetName || !workbookData[sheetName]) {
+                showModal('Error', 'Please select a sheet first.', 'error');
+                return;
+            }
+
+            const currentData = workbookData[sheetName];
+            if (currentData.length === 0 || (currentData.length > 0 && currentData[0].length === 0)) {
+                showModal('No Columns', 'There are no columns to delete.', 'info');
+                return;
+            }
+
+            let minCols = Infinity;
+            if (currentData[0] && currentData[0].some(cell => cell !== null && cell !== undefined && String(cell).trim() !== '')) {
+                minCols = 1; // If there's a header, ensure at least one column remains
+            } else {
+                minCols = 0; // If no header, allow deleting all columns
+            }
+
+            if (currentData[0].length <= minCols) {
+                showModal('Cannot Delete', `Cannot delete the last remaining column.`, 'info');
+                return;
+            }
+
+            currentData.forEach(row => {
+                if (row && row.length > 0) {
+                    row.pop(); // Remove the last cell from each row
+                }
+            });
+
+            showModal('Column Deleted', `The last column has been deleted from sheet '${sheetName}'.`, 'success');
+            displaySheetData(sheetName); // Re-render table to show changes
+        }
+
+
+        function goToCell() {
+            const cellAddress = goToCellInput.value.trim().toUpperCase();
+            if (!cellAddress) {
+                showModal('Input Required', 'Please enter a cell address (e.g., A1, B10).', 'info');
+                return;
+            }
+
+            const coords = getCellIndices(cellAddress);
+            if (!coords) {
+                showModal('Invalid Address', 'Invalid cell address format. Use A1, B10, etc.', 'error');
+                return;
+            }
+
+            // SheetJS's AoA (Array of Arrays) is 0-indexed for both row and column.
+            // The displaySheetData might shift indices if it interprets the first row as headers.
+            // Need to find the actual display row index.
+
+            const sheetName = sheetSelector.value;
+            const sheetData = workbookData[sheetName];
+
+            if (!sheetData || sheetData.length <= coords.row || (sheetData[coords.row] && sheetData[coords.row].length <= coords.col)) {
+                showModal('Cell Not Found', `Cell '${cellAddress}' does not exist in the current sheet's data.`, 'info');
+                return;
+            }
+
+            // Determine if the first row is used as headers by displaySheetData
+            let dataStartRowIndex = 0;
+            if (sheetData[0] && sheetData[0].some(cell => cell !== null && cell !== undefined && String(cell).trim() !== '')) {
+                dataStartRowIndex = 1;
+            }
+
+            const targetRowDisplayIndex = coords.row - dataStartRowIndex;
+
+            const rowElement = tableBody.querySelector(`tr[data-original-data-index="${coords.row}"]`);
+            if (rowElement) {
+                const cellElement = rowElement.querySelector(`td[data-col-index="${coords.col}"]`);
+                if (cellElement) {
+                    cellElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Briefly highlight the cell
+                    cellElement.style.outline = '3px solid #ef4444'; // red-500
+                    cellElement.style.transition = 'outline 0.3s ease-in-out';
+                    setTimeout(() => {
+                        cellElement.style.outline = '';
+                    }, 1500); // Remove highlight after 1.5 seconds
+                } else {
+                    showModal('Cell Not Found', `Cell '${cellAddress}' (Column: ${getExcelColumnLetter(coords.col)}) not found in the displayed table.`, 'info');
+                }
+            } else {
+                showModal('Cell Not Found', `Cell '${cellAddress}' (Row: ${coords.row + 1}) not found in the displayed table.`, 'info');
+            }
+        }
+
+
+        function downloadCurrentSheetCsv() {
+            const selectedSheet = sheetSelector.value;
+            if (!selectedSheet || !workbookData[selectedSheet]) {
+                showModal('Download Error', 'No sheet selected or data available to download.', 'error');
+                return;
+            }
+
+            // Create a temporary worksheet from the current workbookData for the selected sheet
+            // We need to re-create the worksheet from AoA to ensure it's structured correctly for CSV export
+            const ws = XLSX.utils.aoa_to_sheet(workbookData[selectedSheet]);
+            const csv = XLSX.utils.sheet_to_csv(ws);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `${selectedSheet}_edited.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showModal('Download Complete', 'Current sheet downloaded as CSV.', 'success');
+            } else {
+                showModal('Download Error', 'Your browser does not support automatic downloads. Please right-click and save the link.', 'error');
+            }
+        }
+
+        function downloadAllSheetsExcel() {
+            if (Object.keys(workbookData).length === 0) {
+                showModal('Download Error', 'No data available to download as Excel.', 'error');
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+
+            for (const sheetName in workbookData) {
+                const sheet = workbookData[sheetName];
+                const ws = XLSX.utils.aoa_to_sheet(sheet);
+
+                // Re-apply original formulas to the new worksheet if available,
+                // ensuring they are written as formulas and not just their calculated values.
+                const originalFormulas = workbookFormulas[sheetName] || {};
+                for (const cellAddress in originalFormulas) {
+                    // Check if the cell exists in the current worksheet (it might have been deleted)
+                    if (ws[cellAddress]) {
+                        ws[cellAddress].f = originalFormulas[cellAddress]; // Set the formula string
+                        delete ws[cellAddress].v; // Remove value to force re-calculation in Excel
+                        ws[cellAddress].t = 'f'; // Set type to formula
+                    }
+                }
+                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            }
+
+            XLSX.writeFile(wb, 'edited_excel_file.xlsx');
+            showModal('Download Complete', 'All edited sheets downloaded as a new Excel file.', 'success');
+        }
+
+        function downloadFormulasAndDependenciesJson() {
+            const data = {};
+            const selectedSheet = sheetSelector.value;
+
+            if (!selectedSheet) {
+                 showModal('Download Error', 'Please select a sheet first to download formula/dependency JSON.', 'error');
+                 return;
+            }
+
+            const { formulas, dependencies } = extractFormulasAndDependencies(selectedSheet);
+
+            data[selectedSheet] = {
+                formulas: formulas,
+                dependencies: dependencies
+            };
+
+            const jsonString = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
+            const link = document.createElement('a');
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `${selectedSheet}_formulas_dependencies.json`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showModal('Download Complete', 'Formulas and dependencies downloaded as JSON.', 'success');
+            } else {
+                showModal('Download Error', 'Your browser does not support automatic downloads. Please right-click and save the link.', 'error');
+            }
+        }
+
+
+        // Initial state: hide app content and show prompt
+        appContent.classList.add('hidden');
+        initialPrompt.classList.remove('hidden');
+
+    </script>
+</body>
+</html>
